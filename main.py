@@ -235,7 +235,6 @@ class UserInterface(QMainWindow):
             
         self.goBackButton.clicked.connect(self.goBack)
         self.communicate.userName.connect(self.setUserName)
-  
 
 
  
@@ -378,8 +377,16 @@ class History(QWidget):
 
     def goBack(self):
         widget_to_remove = widget.widget(widget.currentIndex()+1)
-        widget.removeWidget(widget_to_remove)         
-        widget.setCurrentIndex(1)            
+        widget.removeWidget(widget_to_remove)
+        widget_to_remove2 = widget.widget(widget.currentIndex()-1)
+        widget.removeWidget(widget_to_remove2)
+        widget_to_remove3 = widget.widget(widget.currentIndex())
+        widget.removeWidget(widget_to_remove3)        
+        ui = UserInterface(self.communicate) 
+        widget.addWidget(ui)
+        widget.setCurrentIndex(1)
+        self.communicate.userName.emit(self.username)
+                   
 
 
     def updateTableData(self):
