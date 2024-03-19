@@ -13,14 +13,15 @@ from keras.models import load_model
 from keras.applications.vgg16 import preprocess_input
 import numpy as np
 from keras.preprocessing import image
-
+import random
 
 
 from PyQt5 import QtWidgets,QtCore
 from PyQt5.QtWidgets import QApplication, QWidget,QHBoxLayout, QLabel, QMainWindow,QVBoxLayout, QPushButton, QDialog, QFileDialog, QListWidget,QListWidgetItem,QTableWidget,QTableWidgetItem
 from PyQt5.uic import loadUi
 from PyQt5.QtCore import QUrl, pyqtSignal, Qt,QObject
-from PyQt5.QtGui import QDesktopServices, QFont
+
+from PyQt5.QtGui import QDesktopServices, QFont,QPixmap
 
 class Communicate(QObject):
     patientName = pyqtSignal(str)
@@ -38,11 +39,17 @@ class Home(QWidget):
      # Create widgets
      goBackButton = QPushButton('GoBack', self)
      self.patientnamelabel = QLabel("None welcome!!")
-     label = QLabel('Pneumonia is an infection that inflames your lungs air sacs (alveoli). The air sacs may fill up with fluid or pus, causing symptoms such as a cough, fever, chills and trouble breathing', self)
-     label.setWordWrap(True)    
+     self.patientnamelabel.setStyleSheet("font-weight: bold; color: #FFE8E3; font-size: 28px;background-color:#2A2929; padding-left:10px")
+     self.articleLabel = QLabel("..")
+     self.articleLabel.setWordWrap(True)    
+     self.articleLabel.setStyleSheet("font-weight: bold; color: #A25467; font-size: 20px;background-color:#2A2929; padding:10px")
+     self.articleLabel.setFixedHeight(400)
      openFileButton = QPushButton("Open File",self)
      predictButton =QPushButton("Predict", self)
-     
+     predictButton.setStyleSheet("color: white;background-color:black;")
+     openFileButton.setStyleSheet("color: white; background-color:black;")
+
+
 
      # print("patentname",self.patientName)
 
@@ -59,24 +66,26 @@ class Home(QWidget):
      self.communicate = communicate
      self.communicate.patientName.connect(self.update_patientName)
      self.communicate.userName.connect(self.setUserName)
-
      self.patientname =None
+
      layout.addWidget(goBackButton)
      layout.addWidget(self.patientnamelabel)
-     layout.addWidget(predictButton)
-     layout.addWidget(label)
+     layout.addWidget(self.articleLabel)
      layout.addWidget(openFileButton)
-
+     layout.addWidget(predictButton)    
      # Set layout for the main window
      self.setLayout(layout)
-
      # Set window properties
      self.setWindowTitle('Home Page')
      self.setGeometry(100, 100, 400, 300)
 
     def update_patientName(self,val):
+         articleArr =["Haemophilus influenzae type b (Hib) is a type of bacteria that can cause pneumonia and  meningitis . The Hib vaccine is recommended for all children under 5 years old",
+                            "Pneumonia is an infection that inflames your lungs air sacs (alveoli). The air sacs may fill up with fluid or pus, causing symptoms such as a cough, fever, chills and trouble breathing",
+                            "Symptoms of pneumonia include cough-(you may cough up yellow or green mucus), fever, shortness of breath, chest pain, fatigue, and in severe cases, confusion."]
          self.patientname = val
-         self.patientnamelabel.setText("Welcome!!"+val)
+         self.patientnamelabel.setText("Welcome!! "+val.upper()) 
+         self.articleLabel.setText(random.choice(articleArr))
          print("Home pn ",val)
 
 
@@ -87,7 +96,14 @@ class Home(QWidget):
     def goBack(self):
         widget_to_remove = widget.widget(widget.currentIndex()+1)
         widget.removeWidget(widget_to_remove) 
+        widget_to_remove2 = widget.widget(widget.currentIndex()-1)
+        widget.removeWidget(widget_to_remove2)
+        widget_to_remove3 = widget.widget(widget.currentIndex())
+        widget.removeWidget(widget_to_remove3)        
+        ui = UserInterface(self.communicate) 
+        widget.addWidget(ui)
         widget.setCurrentIndex(1)
+        self.communicate.userName.emit(self.username)
         
     def upload_image(self):
         filename= QFileDialog.getOpenFileName()
@@ -114,34 +130,38 @@ class Home(QWidget):
 
     def predict_result(self):
 
-
-        predicted_class_index = np.argmax(result)
-        class_labels = ['Not Pneumonia', 'Pneumonia'] 
-        
-        predicted_class_label = class_labels[predicted_class_index]
-        print(f'Predicted Class: {predicted_class_label}')
-        
-        if(predicted_class_label=='Pneumonia'):
-            test = True
-        else:
-            test = False    
-
-        send_data ={
-            'user': self.username,
-            'result': test,
-            'patient':self.patientname,
+        if 'result' not in globals() or result is None:
+            print("An image file was not selected before prediction.") 
+        else:   
+            predicted_class_index = np.argmax(result)
+            class_labels = ['Not Pneumonia', 'Pneumonia'] 
             
-        }
-        apiEndpoint = "http://localhost:3000/api/patient/test"
-        response = requests.post(apiEndpoint, json=send_data)
-        data = response.json()
-             
-        resWidget = ResultDisplayWidget(self.communicate,predicted_class_label)
-        widget_to_remove = widget.widget(widget.currentIndex()+1)
-        widget.removeWidget(widget_to_remove) 
-        widget.addWidget(resWidget)
-        widget.setCurrentIndex(widget.currentIndex()+1)
-        self.communicate.patientName.emit(self.patientname)  
+            predicted_class_label = class_labels[predicted_class_index]
+            print(f'Predicted Class: {predicted_class_label}')
+            
+            if(predicted_class_label=='Pneumonia'):
+                test = True
+            else:
+                test = False    
+
+            send_data ={
+                'user': self.username,
+                'result': test,
+                'patient':self.patientname,
+                
+            }
+            apiEndpoint = "http://localhost:3000/api/patient/test"
+            response = requests.post(apiEndpoint, json=send_data)
+            data = response.json()
+                
+            resWidget = ResultDisplayWidget(self.communicate,predicted_class_label)
+            widget_to_remove = widget.widget(widget.currentIndex()+1)
+            widget.removeWidget(widget_to_remove) 
+            widget.addWidget(resWidget)
+            widget.setCurrentIndex(widget.currentIndex()+1)
+            self.communicate.patientName.emit(self.patientname)
+            self.communicate.userName.emit(self.username)  
+
 
         
 
@@ -156,29 +176,59 @@ class ResultDisplayWidget(QWidget):
         # Create a vertical layout
         layout = QVBoxLayout()
         self.communicate = communicate
+        self.communicate.userName.connect(self.setUsername)
         self.text = text
+        self.username = None
         self.communicate.patientName.connect(self.update_label)
         self.resultLabel = QLabel("NOne")
         self.backButt = QPushButton("Back")
+
+        # Set the font for the resultLabel
+        self.resultLabel.setStyleSheet("color: black; font-size: 28px;")         
         self.resultLabel.setAlignment(Qt.AlignCenter)
         self.resultLabel.setFont(QFont("Arial", 16))
         self.resultLabel.setWordWrap(True)
+        self.imageLabel = QLabel(widget)
 
+        self.pixmap =QPixmap(None)
+        self.imageLabel.setPixmap(self.pixmap.scaled(300, 300, Qt.KeepAspectRatio))
+        self.imageLabel.setAlignment(Qt.AlignCenter)     
         # Add the label to the layout
         layout.addWidget(self.resultLabel)
+        layout.addWidget(self.imageLabel)
+
         layout.addWidget(self.backButt)
 
         # Set the layout for the widget
         self.setLayout(layout)
         self.backButt.clicked.connect(self.backFunc)
+    def setUsername(self,val):
+        self.username = val
+        print("Result Widget ",val)
 
     def update_label(self,val):
-         self.resultLabel.setText(val+" has "+self.text)   
+         if(self.text == 'Pneumonia'):
+            self.resultLabel.setText(val.upper()+" has "+self.text) 
+            self.pixmap =  QPixmap(r"D:\sem7\project\Python\Unhealthy.jpg")
+            self.imageLabel.setPixmap(self.pixmap.scaled(300, 300, Qt.KeepAspectRatio))
+         else:
+            self.resultLabel.setText(val.upper()+" doesn't have Pneumonia") 
+            self.pixmap =  QPixmap(r"D:\sem7\project\Python\Healthy.png")
+            self.imageLabel.setPixmap(self.pixmap.scaled(300, 300, Qt.KeepAspectRatio))                
          print("ResultDIsplay ",val)   
+
     def backFunc(self):
         widget_to_remove = widget.widget(widget.currentIndex())
         widget.removeWidget(widget_to_remove) 
-        widget.setCurrentIndex(widget.currentIndex()-1)                            
+        widget_to_remove2 = widget.widget(widget.currentIndex()-1)
+        widget.removeWidget(widget_to_remove2)
+        widget_to_remove3 = widget.widget(widget.currentIndex())
+        widget.removeWidget(widget_to_remove3)        
+        ui = UserInterface(self.communicate) 
+        widget.addWidget(ui)
+        widget.setCurrentIndex(1)
+        self.communicate.userName.emit(self.username)
+                          
 
 class UserItemWidget(QWidget):
     # Define a custom signal with user data
@@ -188,7 +238,7 @@ class UserItemWidget(QWidget):
         super().__init__()
         layout = QHBoxLayout()
         self.communicate = communicate
-        self.name_label = QLabel(user_data)
+        self.name_label = QLabel(user_data.upper())
         self.button = QPushButton("Action")
         layout.addWidget(self.name_label)
         if(numberOfPrediction>0):
@@ -346,8 +396,8 @@ class History(QWidget):
         self.goBackButton = QPushButton("GoBack", self)
          # Create a table with 2 columns (patient, result)
         self.table = QTableWidget(self)
-        self.table.setColumnCount(2)
-        self.table.setHorizontalHeaderLabels(["patient", "result"])
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["patient", "result","time","date"])
 
         # Create layout and add the table
         self.username = None
@@ -361,7 +411,7 @@ class History(QWidget):
 
         # Set window properties
         self.setWindowTitle('History Table')
-        self.setGeometry(100, 100, 400, 300)
+        self.setGeometry(100, 100, 400, 400)
 
         self.goBackButton.clicked.connect(self.goBack)
 
@@ -395,7 +445,7 @@ class History(QWidget):
         response = requests.post(apiEndpoint, json={'user': self.username})
         data = response.json()
         # print(data)
-
+   
         # Clear existing rows
         self.table.setRowCount(0)
 
@@ -412,6 +462,18 @@ class History(QWidget):
                 # # Set items in each cell of the new row
                     self.table.setItem(row, 0, QTableWidgetItem(history_entry['patient']['name']))
                     self.table.setItem(row, 1, QTableWidgetItem(str(res)))
+                    if(history_entry['updatedAt']):
+                        self.table.setItem(row, 2, QTableWidgetItem(history_entry['updatedAt'].split('T')[1].split('.')[0]))
+                        self.table.setItem(row, 3, QTableWidgetItem(history_entry['updatedAt'].split('T')[0]))
+
+                    else:
+                        self.table.setItem(row, 2, QTableWidgetItem('Null'))
+                        self.table.setItem(row, 3, QTableWidgetItem('Null'))
+
+
+
+
+
                     row=row+1
 
 
@@ -439,27 +501,39 @@ class AddPatient(QDialog):
     def goBack(self):
         widget_to_remove = widget.widget(widget.currentIndex()+1)
         widget.removeWidget(widget_to_remove)         
-        widget.setCurrentIndex(1)  
+        widget_to_remove2 = widget.widget(widget.currentIndex()-1)
+        widget.removeWidget(widget_to_remove2)
+        widget_to_remove3 = widget.widget(widget.currentIndex())
+        widget.removeWidget(widget_to_remove3)        
+        ui = UserInterface(self.communicate) 
+        widget.addWidget(ui)
+        widget.setCurrentIndex(1)
+        self.communicate.userName.emit(self.username)  
 
     def addedfunction(self):
-        name=self.name.text()
-        age = int (self.age.text())
-        gender = self.gender.text()
-        data = {
-            'name': name,
-            'age': age,
-            'gender':gender,
-            'user':self.username
+
+        if(self.name.text() =="" or self.gender.text()=="" or self.age.text()==""):
+            print("While adding the patient enter the required credentials")
+        else:    
+            name=self.name.text()
+            age = int (self.age.text())
+            gender = self.gender.text()
+
+            data = {
+                'name': name,
+                'age': age,
+                'gender':gender,
+                'user':self.username
+                    }
+            headers = {
+
+            'Content-Type': 'application/json',
+
                 }
-        headers = {
-   
-        'Content-Type': 'application/json',
+            apiEndpoint = "http://localhost:3000/api/patient/add"
+            response = requests.post(apiEndpoint, json=data, headers=headers)
 
-            }
-        apiEndpoint = "http://localhost:3000/api/patient/add"
-        response = requests.post(apiEndpoint, json=data, headers=headers)
-
-        print(response)
+            print("While adding patient ",response)
 
 
 class Login(QDialog):
@@ -467,10 +541,10 @@ class Login(QDialog):
         super(Login,self).__init__()
         loadUi("login.ui",self)
         self.communicate = Communicate()
-
         self.loginbutton.clicked.connect(self.loginfunction)
         self.password.setEchoMode(QtWidgets.QLineEdit.Password)
         self.createaccbutton.clicked.connect(self.gotocreate)
+
 
     def loginfunction(self):
         name = self.name.text()
@@ -492,7 +566,8 @@ class Login(QDialog):
         id = s
 
         if(s==False):
-            print(m)
+            print("Login Error ",m)
+
         else:
             print("Successfully logged in with name: ", name, "and password:", password)
             widget_to_remove = widget.widget(widget.currentIndex()+1)
@@ -517,11 +592,11 @@ class Login(QDialog):
 class CreateAcc(QDialog):
     def __init__(self):
         super(CreateAcc,self).__init__()
-        loadUi("userPage.ui",self)
+        loadUi("register.ui",self)
         layout = QVBoxLayout()
         
         self.goBackButton = QPushButton("GoBack", self)
-        self.goBackButton.setStyleSheet("color: white; border: 2px solid #333333;")
+        self.goBackButton.setStyleSheet("color: white; border: 2px solid #F4EBF0;")
         self.goBackButton.setFixedSize(80, 50)
         self.goBackButton.move(20, 10)
         layout.addWidget(self.goBackButton)
@@ -540,7 +615,7 @@ class CreateAcc(QDialog):
         name = self.name.text()
         password = self.password.text()  
         confirmPassword=self.confirmpass.text()
-        print("Button Post clicked")
+        # print("Button Post clicked")
         data = {
             'name': name,
             'password': password,
@@ -559,7 +634,7 @@ class CreateAcc(QDialog):
 
         if password==confirmPassword:
             if(res["success"]==False):
-                print("Cannot create an account cause "+ res["msg"])
+                print("Cannot create an account because you have to "+ res["msg"])
             else:
                 print("Successfully created acc with name: ", name, "and password: ", password)
                 login=Login()
